@@ -10,8 +10,11 @@ import (
 	"github.com/gofiber/websocket/v2"
 	_ "github.com/lib/pq"
 )
-var postgresConfig = "user=USER dbname=DB_NAME sslmode=disable" //TODO: refactor
-var tableName = "TEST" //TODO: refactor
+//TODO: refactor
+var user = "USER"
+var dbName="DB_NAME"
+var postgresConfig = "user="+user+" dbname="+dbName+" sslmode=disable" 
+var tableName = "TEST" 
 
 type response struct {
 	IsRequestSuccessful bool `json:"isRequestSuccessful"`
@@ -35,7 +38,6 @@ func register(ctx *websocket.Conn) {
 	}
 	ctx.Close()
 	defer db.Close()
-	// return nil
 }
 
 func login(ctx *websocket.Conn) {
@@ -56,7 +58,6 @@ func login(ctx *websocket.Conn) {
 	}
 	ctx.Close()
 	defer db.Close()
-	// return nil
 }
 
 func insertCreds(db *sql.DB, username string, password string) error {
