@@ -4,7 +4,6 @@ import (
 	// "database/sql"
 	"database/sql"
 	"errors"
-	"fmt"
 	"instant-messaging-platform-backend/config"
 
 	"encoding/json"
@@ -33,15 +32,15 @@ func Register(ctx *fiber.Ctx) error {
 		return err
 	}
 	defer db.Close()
-	
+
 	loginReq := LoginRequest{}
 	if err := ctx.BodyParser(&loginReq); err != nil {
-		fmt.Println(string(ctx.Body()))
 		return err
 	}
-	err = sendResponse(insertCreds(db, ctx.Query(loginReq.Username), ctx.Query(loginReq.Password)), ctx)
+
+	err = sendResponse(insertCreds(db, loginReq.Username, loginReq.Password), ctx, 201, 409)
 	if err != nil {
-		return err
+		return nil //TODO: unless err == nil, it wasn't giving custom status code, maybe refactor
 	}
 
 	return storeAuthCookieAndUpdateDatabase(ctx, db)
@@ -58,9 +57,10 @@ func Login(ctx *fiber.Ctx) error {
 	if err := ctx.BodyParser(&loginReq); err != nil {
 		return err
 	}
-	err = sendResponse(validateCreds(db, ctx.Query(loginReq.Username), ctx.Query(loginReq.Password)), ctx)
+	
+	err = sendResponse(validateCreds(db, loginReq.Username, loginReq.Password), ctx, 200, 400)
 	if err != nil {
-		return err
+		return nil //TODO: unless err == nil, it wasn't giving custom status code, maybe refactor
 	}
 
 	return storeAuthCookieAndUpdateDatabase(ctx, db)
@@ -96,7 +96,6 @@ func insertCreds(db *sql.DB, username string, password string) error {
 	if err != nil {
 		return err
 	}
-
 	_, err = db.Exec("insert into " + config.UsersTable + " values ('" + username + "','" + password + "')")
 	return err
 }
@@ -116,27 +115,31 @@ func validateCreds(db *sql.DB, username string, password string) error {
 	return nil
 }
 
-func sendResponse(err error, ctx *fiber.Ctx) error {
+func sendResponse(err error, ctx *fiber.Ctx, successStatusCode int, failureStatusCode int) error {
 	if err != nil {
-		resp, error := json.Marshal(LoginRegisterResponse{
+		failureResponse, error := json.Marshal(LoginRegisterResponse{
 			IsRequestSuccessful: false,
 		})
 		if error != nil {
 			return error
 		}
-		error = ctx.Send(resp)
+		error = ctx.Send(failureResponse)
+		if error != nil {
+			return error
+		}
+		error = ctx.Status(failureStatusCode).Send(failureResponse)
 		if error != nil {
 			return error
 		}
 		return err
 	} else {
-		loginResp, err := json.Marshal(LoginRegisterResponse{
+		successResponse, err := json.Marshal(LoginRegisterResponse{
 			IsRequestSuccessful: true,
 		})
 		if err != nil {
 			return err
 		}
-		return ctx.Send(loginResp)
+		return ctx.Status(successStatusCode).Send(successResponse)
 	}
 }
 
