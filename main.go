@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	if err := server.New().Listen(":3000"); err != nil{
+	if err := server.New().Listen(":3000"); err != nil {
 		log.Fatal("Error while running", err)
 	}
 }

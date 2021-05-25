@@ -12,4 +12,5 @@ require (
 	github.com/valyala/fasthttp v1.24.0 // indirect
 	github.com/valyala/tcplisten v1.0.0 // indirect
 	golang.org/x/sys v0.0.0-20210514084401-e8d321eab015 // indirect
+	gopkg.in/square/go-jose.v2 v2.5.1
 )
