@@ -1,7 +1,6 @@
 package server
 
 import (
-	// "database/sql"
 	"database/sql"
 	"errors"
 	"instant-messaging-platform-backend/config"
@@ -10,12 +9,12 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	// "github.com/gofiber/websocket/v2"
 	_ "github.com/lib/pq"
 )
 
 type LoginCheckResponse struct {
-	Username string `json:"username"`
+	Username  string `json:"username"`
+	AuthToken string `json:"auth"`
 }
 type LoginRegisterResponse struct {
 	IsRequestSuccessful bool `json:"isRequestSuccessful"`
@@ -25,6 +24,8 @@ type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
+
+var loginRegisterFailResponse string = `{"isRequestSuccessful":false}`
 
 func Register(ctx *fiber.Ctx) error {
 	db, err := sql.Open("postgres", config.PostgresConfig)
@@ -38,9 +39,9 @@ func Register(ctx *fiber.Ctx) error {
 		return err
 	}
 
-	err = sendResponse(insertCreds(db, loginReq.Username, loginReq.Password), ctx, 201, 409)
+	err = sendSuccessResponse(insertCreds(db, loginReq.Username, loginReq.Password), ctx, 201, 409)
 	if err != nil {
-		return nil //TODO: unless err == nil, it wasn't giving custom status code, maybe refactor
+		return fiber.NewError(409, loginRegisterFailResponse)
 	}
 
 	return storeAuthCookieAndUpdateDatabase(ctx, db)
@@ -57,10 +58,10 @@ func Login(ctx *fiber.Ctx) error {
 	if err := ctx.BodyParser(&loginReq); err != nil {
 		return err
 	}
-	
-	err = sendResponse(validateCreds(db, loginReq.Username, loginReq.Password), ctx, 200, 400)
+
+	err = sendSuccessResponse(validateCreds(db, loginReq.Username, loginReq.Password), ctx, 200, 400)
 	if err != nil {
-		return nil //TODO: unless err == nil, it wasn't giving custom status code, maybe refactor
+		return fiber.NewError(400, loginRegisterFailResponse)
 	}
 
 	return storeAuthCookieAndUpdateDatabase(ctx, db)
@@ -75,14 +76,16 @@ func LoginCheck(ctx *fiber.Ctx) error {
 		return err
 	}
 	defer db.Close()
+	p := ctx.Request().Header.Cookie("Auth-Token")
 
 	rowPtr := db.QueryRow("select * from " + config.CredsTable + " where uuid='" + string(ctx.Request().Header.Cookie("Auth-Token")) + "'")
 	if err := rowPtr.Scan(&uuid, &username); err != nil {
-		return err
+		return fiber.NewError(400, "No such user is registered")
 	}
 
 	loginCheckResp, err := json.Marshal(LoginCheckResponse{
-		Username: username,
+		Username:  username,
+		AuthToken: string(p),
 	})
 	if err != nil {
 		return err
@@ -115,22 +118,8 @@ func validateCreds(db *sql.DB, username string, password string) error {
 	return nil
 }
 
-func sendResponse(err error, ctx *fiber.Ctx, successStatusCode int, failureStatusCode int) error {
+func sendSuccessResponse(err error, ctx *fiber.Ctx, successStatusCode int, failureStatusCode int) error {
 	if err != nil {
-		failureResponse, error := json.Marshal(LoginRegisterResponse{
-			IsRequestSuccessful: false,
-		})
-		if error != nil {
-			return error
-		}
-		error = ctx.Send(failureResponse)
-		if error != nil {
-			return error
-		}
-		error = ctx.Status(failureStatusCode).Send(failureResponse)
-		if error != nil {
-			return error
-		}
 		return err
 	} else {
 		successResponse, err := json.Marshal(LoginRegisterResponse{
@@ -153,11 +142,16 @@ func storeAuthCookieAndUpdateDatabase(ctx *fiber.Ctx, db *sql.DB) error {
 	if err != nil {
 		return err
 	}
+	err = store.Save()
+	if err != nil {
+		return err
+	}
 
 	_, err = db.Exec("create table if not exists " + config.CredsTable + "(uuid varchar(36), username varchar(20), PRIMARY KEY (uuid))") //varchar 36 to store uuid
 	if err != nil {
 		return err
 	}
 	_, err = db.Exec("insert into " + config.CredsTable + " values ('" + store.ID() + "','" + loginReq.Username + "')")
+
 	return err
 }

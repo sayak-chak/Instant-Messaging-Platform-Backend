@@ -17,7 +17,6 @@ import (
 )
 
 func Test_When_Guest_Tries_To_Create_New_User_With_Unique_Username_Then_Server_Should_Return_Status_201(t *testing.T) {
-	setup()
 	defer tearDown()
 	app := server.New()
 	app.Listen("3000")
@@ -46,7 +45,6 @@ func Test_When_Guest_Tries_To_Create_New_User_With_Unique_Username_Then_Server_S
 }
 
 func Test_When_Guest_Tries_To_Create_New_User_With_Non_Unique_Username_Then_Server_Should_Return_Status_409(t *testing.T) {
-	setup()
 	defer tearDown()
 	app := server.New()
 	app.Listen("3000")
@@ -75,7 +73,6 @@ func Test_When_Guest_Tries_To_Create_New_User_With_Non_Unique_Username_Then_Serv
 }
 
 func Test_When_Guest_Tries_To_Login_With_Valid_Credentials_Then_Server_Should_Return_Status_200(t *testing.T) {
-	setup()
 	defer tearDown()
 	app := server.New()
 	app.Listen("3000")
@@ -103,7 +100,6 @@ func Test_When_Guest_Tries_To_Login_With_Valid_Credentials_Then_Server_Should_Re
 	utils.AssertEqual(t, 200, resp.StatusCode, "Status code")
 }
 func Test_When_Guest_Tries_To_Login_With_Invalid_Credentials_Then_Server_Should_Return_Status_400(t *testing.T) {
-	setup()
 	defer tearDown()
 	app := server.New()
 	app.Listen("3000")
@@ -151,23 +147,6 @@ func createUser(username string, password string, jsonStr []byte, app *fiber.App
 	}
 }
 
-func setup() {
-	db, err := sql.Open("postgres", config.PostgresConfig)
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer db.Close()
-
-	_, err = db.Exec("create table if not exists " + config.UsersTable + "(username varchar(20), password varchar(20), PRIMARY KEY (username))")
-	if err != nil {
-		fmt.Println(err)
-	}
-	_, err = db.Exec("create table if not exists " + config.CredsTable + "(uuid varchar(36), username varchar(20), PRIMARY KEY (uuid))") //varchar 36 to store uuid
-	if err != nil {
-		fmt.Println(err)
-	}
-}
-
 func tearDown() {
 	db, err := sql.Open("postgres", config.PostgresConfig)
 	if err != nil {
@@ -180,6 +159,10 @@ func tearDown() {
 		fmt.Println(err)
 	}
 	_, err = db.Exec("drop table " + config.UsersTable)
+	if err != nil {
+		fmt.Println(err)
+	}
+	_, err = db.Exec("drop table " + config.ChatTable)
 	if err != nil {
 		fmt.Println(err)
 	}
