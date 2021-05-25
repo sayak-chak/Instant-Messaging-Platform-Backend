@@ -1,27 +1,25 @@
 package client
 
 import (
-	"github.com/gofiber/websocket/v2"
 	"sync"
+
+	"github.com/gofiber/websocket/v2"
 )
 
-var Clients = make(map[*websocket.Conn]bool) //indicates which connections are open, remove if client closes
+var ClientsMap = make(map[string]*websocket.Conn) //indicates which connections are open, remove if client closes
 var lock = sync.RWMutex{}
 
-type ChatMessage struct{
-	Username string `json:"username"`
-	Msg  string `json:"message"`
-
-}
-
-func Write(ctx *websocket.Conn) {
+func RemoveClient(username string) {
 	lock.Lock()
 	defer lock.Unlock()
-	Clients[ctx] = true
+	delete(ClientsMap, username)
 }
 
-func Remove(ctx *websocket.Conn) {
+func AddClient(username string, ctx *websocket.Conn) {
+	if _, isPresent := ClientsMap[username]; isPresent {
+		return
+	}
 	lock.Lock()
 	defer lock.Unlock()
-	delete(Clients, ctx)
+	ClientsMap[username] = ctx
 }
