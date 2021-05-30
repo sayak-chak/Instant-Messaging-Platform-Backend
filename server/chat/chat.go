@@ -1,7 +1,8 @@
-package server
+package chat
 
 import (
 	"database/sql"
+	_ "github.com/lib/pq"
 	"fmt"
 	"instant-messaging-platform-backend/client"
 	"instant-messaging-platform-backend/config"
@@ -11,30 +12,30 @@ import (
 	"gopkg.in/square/go-jose.v2/json"
 )
 
-var broadcastChannelForGroupChat = make(chan ChatResponse)
+var broadcastChannelForGroupChat = make(chan chatResponse)
 
-type ChatRequest struct {
+type chatRequest struct {
 	Target  string `json:"target"`
 	Sender  string `json:"sender"`
 	Message string `json:"message"`
 }
 
-type ChatResponse struct {
+type chatResponse struct {
 	Type    string `json:"type"`
 	Sender  string `json:"sender"`
 	Message string `json:"message"`
 }
 
 type ChatHistoryResponses struct {
-	Responses []ChatHistoryResponse `json:"senderAndMessages"`
+	Responses []chatHistoryResponse `json:"senderAndMessages"`
 }
 
-type ChatHistoryResponse struct {
+type chatHistoryResponse struct {
 	Sender      string `json:"sender"`
 	ChatMessage string `json:"message"`
 }
 
-func chat(ctx *websocket.Conn) {
+func Chat(ctx *websocket.Conn) {
 	//TODO: implement authentication
 	if _, isClientAlreadyPresent := client.ClientsMap[ctx.Query("sender")]; isClientAlreadyPresent {
 		return
@@ -45,57 +46,57 @@ func chat(ctx *websocket.Conn) {
 	go broadcastMsgInGroup()
 
 	for {
-		chatRequest := ChatRequest{}
-		var chatResponse ChatResponse
+		chatRequestDetails := chatRequest{}
+		var chatResponseDetails chatResponse
 
-		err := ctx.ReadJSON(&chatRequest)
+		err := ctx.ReadJSON(&chatRequestDetails)
 		if err != nil { //TODO : add idle timer
-			client.ClientsMap[chatRequest.Sender].Close()
-			client.RemoveClient(chatRequest.Sender)
+			client.ClientsMap[chatRequestDetails.Sender].Close()
+			client.RemoveClient(chatRequestDetails.Sender)
 			break
 		}
 		typeOfResponse := "Group"
-		if chatRequest.Target != typeOfResponse {
+		if chatRequestDetails.Target != typeOfResponse {
 			typeOfResponse = "Personal"
 		}
-		chatResponse = ChatResponse{
+		chatResponseDetails = chatResponse{
 			Type:    typeOfResponse,
-			Sender:  chatRequest.Sender,
-			Message: chatRequest.Message,
+			Sender:  chatRequestDetails.Sender,
+			Message: chatRequestDetails.Message,
 		}
 		if typeOfResponse == "Group" {
-			broadcastChannelForGroupChat <- chatResponse
+			broadcastChannelForGroupChat <- chatResponseDetails
 		} else {
-			sendDirectMessageTo(chatRequest.Target, chatResponse)
+			sendDirectMessageTo(chatRequestDetails.Target, chatResponseDetails)
 		}
 	}
 }
 
-func sendDirectMessageTo(target string, chatResponse ChatResponse) {
+func sendDirectMessageTo(target string, chatResponseDetails chatResponse) {
 	targetCtx, isTargetClientPresent := client.ClientsMap[target]
 	if isTargetClientPresent {
-		err := targetCtx.WriteJSON(chatResponse)
+		err := targetCtx.WriteJSON(chatResponseDetails)
 		if err != nil {
 			fmt.Println(err)
 		}
-		ownCxt, isPresent := client.ClientsMap[chatResponse.Sender]
+		ownCxt, isPresent := client.ClientsMap[chatResponseDetails.Sender]
 		if !isPresent {
-			storeMessageInDataBase(chatResponse.Sender, chatResponse.Message, target)
+			storeMessageInDataBase(chatResponseDetails.Sender, chatResponseDetails.Message, target)
 			return
 		}
-		ownCxt.WriteJSON(chatResponse)
-		storeMessageInDataBase(chatResponse.Sender, chatResponse.Message, target)
+		ownCxt.WriteJSON(chatResponseDetails)
+		storeMessageInDataBase(chatResponseDetails.Sender, chatResponseDetails.Message, target)
 		return
 
 	}
-	ownCxt, isPresent := client.ClientsMap[chatResponse.Sender]
+	ownCxt, isPresent := client.ClientsMap[chatResponseDetails.Sender]
 	if !isPresent {
-		storeMessageInDataBase(chatResponse.Sender, chatResponse.Message, target)
+		storeMessageInDataBase(chatResponseDetails.Sender, chatResponseDetails.Message, target)
 		return
 	}
 
-	ownCxt.WriteJSON(chatResponse)
-	storeMessageInDataBase(chatResponse.Sender, chatResponse.Message, target)
+	ownCxt.WriteJSON(chatResponseDetails)
+	storeMessageInDataBase(chatResponseDetails.Sender, chatResponseDetails.Message, target)
 }
 
 func broadcastMsgInGroup() {
@@ -125,7 +126,7 @@ func storeMessageInDataBase(sender string, message string, target string) {
 	}
 }
 
-func getChatHistory(ctx *fiber.Ctx) error {
+func GetChatHistory(ctx *fiber.Ctx) error {
 	//TODO: authneticate
 	username := ctx.Query("username")
 	sender := ctx.Query("sender")
@@ -137,7 +138,7 @@ func getChatHistory(ctx *fiber.Ctx) error {
 	defer db.Close()
 
 	var message string
-	chatSenderAndMessageList := make([]ChatHistoryResponse, 0)
+	chatSenderAndMessageList := make([]chatHistoryResponse, 0)
 
 	rowPtrs, err := db.Query("select sender,message from " + config.ChatTable + " where room='" + getRoomName(username, sender) + "'")
 
@@ -149,7 +150,7 @@ func getChatHistory(ctx *fiber.Ctx) error {
 		if err := rowPtrs.Scan(&sender, &message); err != nil {
 			return err
 		}
-		chatSenderAndMessageList = append(chatSenderAndMessageList, ChatHistoryResponse{
+		chatSenderAndMessageList = append(chatSenderAndMessageList, chatHistoryResponse{
 			Sender:      sender,
 			ChatMessage: message,
 		})

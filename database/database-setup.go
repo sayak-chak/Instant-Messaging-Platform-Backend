@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"instant-messaging-platform-backend/config"
+	_ "github.com/lib/pq"
 )
 
 func SetupDataBase() error {

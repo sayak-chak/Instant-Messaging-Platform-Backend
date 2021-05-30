@@ -1,11 +1,7 @@
-package server_test
+package entry_test
 
 import (
 	"bytes"
-	"database/sql"
-	"fmt"
-
-	"instant-messaging-platform-backend/config"
 	"instant-messaging-platform-backend/mocks"
 	"instant-messaging-platform-backend/server"
 	"io/ioutil"
@@ -17,7 +13,7 @@ import (
 )
 
 func Test_When_Guest_Tries_To_Create_New_User_With_Unique_Username_Then_Server_Should_Return_Status_201(t *testing.T) {
-	defer tearDown()
+	defer mocks.TearDown()
 	app := server.New()
 	app.Listen("3000")
 
@@ -45,7 +41,7 @@ func Test_When_Guest_Tries_To_Create_New_User_With_Unique_Username_Then_Server_S
 }
 
 func Test_When_Guest_Tries_To_Create_New_User_With_Non_Unique_Username_Then_Server_Should_Return_Status_409(t *testing.T) {
-	defer tearDown()
+	defer mocks.TearDown()
 	app := server.New()
 	app.Listen("3000")
 	nonUniqueUsername := "TEST_USERNAME"
@@ -73,7 +69,7 @@ func Test_When_Guest_Tries_To_Create_New_User_With_Non_Unique_Username_Then_Serv
 }
 
 func Test_When_Guest_Tries_To_Login_With_Valid_Credentials_Then_Server_Should_Return_Status_200(t *testing.T) {
-	defer tearDown()
+	defer mocks.TearDown()
 	app := server.New()
 	app.Listen("3000")
 	username := "TEST_USERNAME"
@@ -100,7 +96,7 @@ func Test_When_Guest_Tries_To_Login_With_Valid_Credentials_Then_Server_Should_Re
 	utils.AssertEqual(t, 200, resp.StatusCode, "Status code")
 }
 func Test_When_Guest_Tries_To_Login_With_Invalid_Credentials_Then_Server_Should_Return_Status_400(t *testing.T) {
-	defer tearDown()
+	defer mocks.TearDown()
 	app := server.New()
 	app.Listen("3000")
 	username := "TEST_USERNAME"
@@ -144,26 +140,5 @@ func createUser(username string, password string, jsonStr []byte, app *fiber.App
 	jsonStr, err = mocks.GetLoginJson(username, password)
 	if err != nil {
 		t.Error(err)
-	}
-}
-
-func tearDown() {
-	db, err := sql.Open("postgres", config.PostgresConfig)
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer db.Close()
-
-	_, err = db.Exec("drop table " + config.CredsTable)
-	if err != nil {
-		fmt.Println(err)
-	}
-	_, err = db.Exec("drop table " + config.UsersTable)
-	if err != nil {
-		fmt.Println(err)
-	}
-	_, err = db.Exec("drop table " + config.ChatTable)
-	if err != nil {
-		fmt.Println(err)
 	}
 }

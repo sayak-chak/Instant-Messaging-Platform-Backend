@@ -1,18 +1,23 @@
-package server
+package search
 
 import (
 	"database/sql"
+	"fmt"
+	_ "github.com/lib/pq"
 	"instant-messaging-platform-backend/config"
+	"instant-messaging-platform-backend/server/authentication"
 
 	"github.com/gofiber/fiber/v2"
 )
 
+var AuthValidator = authentication.IsAuthValid
 var searchSuccessResponse string = `{"isUserPresent":true}`
 var searchFailResponse string = `{"isUserPresent":false}`
 
-func checkIfUserExists(ctx *fiber.Ctx) error {
+func CheckIfUserExists(ctx *fiber.Ctx) error {
 	queryUsername := ctx.Query("username")
-	if isAuthValid, err := IsAuthValid(string(ctx.Request().Header.Cookie("Auth-Token"))); !isAuthValid || err != nil {
+	if isAuthValid, err := AuthValidator(string(ctx.Request().Header.Cookie("Auth-Token"))); !isAuthValid || err != nil {
+		fmt.Println("CHANG(a)EEED ", queryUsername)
 		return fiber.NewError(400)
 	}
 

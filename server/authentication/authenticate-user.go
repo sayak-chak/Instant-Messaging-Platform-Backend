@@ -1,10 +1,12 @@
-package server
+package authentication
 
 import (
 	"database/sql"
 	"errors"
 	"instant-messaging-platform-backend/config"
+	_ "github.com/lib/pq"
 )
+
 
 func IsAuthValid(authToken string) (bool, error) {
 	

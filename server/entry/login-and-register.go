@@ -1,9 +1,10 @@
-package server
+package entry
 
 import (
 	"database/sql"
 	"errors"
 	"instant-messaging-platform-backend/config"
+	"instant-messaging-platform-backend/server/store"
 
 	"encoding/json"
 
@@ -138,7 +139,7 @@ func storeAuthCookieAndUpdateDatabase(ctx *fiber.Ctx, db *sql.DB) error {
 		return err
 	}
 
-	store, err := Sessions.Get(ctx) // get/create new session
+	store, err := store.Sessions.Get(ctx) // get/create new session
 	if err != nil {
 		return err
 	}
