@@ -1,11 +1,12 @@
 package chat
 
 import (
-	"database/sql"
-	_ "github.com/lib/pq"
 	"fmt"
+	"github.com/go-pg/pg/v10"
+	_ "github.com/lib/pq"
 	"instant-messaging-platform-backend/client"
 	"instant-messaging-platform-backend/config"
+	"instant-messaging-platform-backend/database/model"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
@@ -51,7 +52,11 @@ func Chat(ctx *websocket.Conn) {
 
 		err := ctx.ReadJSON(&chatRequestDetails)
 		if err != nil { //TODO : add idle timer
-			client.ClientsMap[chatRequestDetails.Sender].Close()
+			//TODO: figure out if closing the client is mandatory
+			//err = client.ClientsMap[chatRequestDetails.Sender].Close()
+			//if err != nil {
+			//	print("Can't close client..", err)
+			//}
 			client.RemoveClient(chatRequestDetails.Sender)
 			break
 		}
@@ -114,13 +119,17 @@ func broadcastMsgInGroup() {
 }
 
 func storeMessageInDataBase(sender string, message string, target string) {
-	db, err := sql.Open("postgres", config.PostgresConfig)
-	if err != nil {
-		fmt.Println(err)
-	}
+	db := pg.Connect(&pg.Options{
+		User:     config.User,
+		Database: config.DbName,
+	})
 	defer db.Close()
 	room := getRoomName(sender, target)
-	_, err = db.Query("insert into " + config.ChatTable + " values ('" + sender + "', '" + room + "', '" + message + "')")
+	_, err := db.Model(&model.ChatTable{
+		sender,
+		room,
+		message,
+	}).Insert()
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -131,28 +140,28 @@ func GetChatHistory(ctx *fiber.Ctx) error {
 	username := ctx.Query("username")
 	sender := ctx.Query("sender")
 
-	db, err := sql.Open("postgres", config.PostgresConfig)
-	if err != nil {
-		fmt.Println(err)
-	}
+	db := pg.Connect(&pg.Options{
+		User:     config.User,
+		Database: config.DbName,
+	})
 	defer db.Close()
 
-	var message string
 	chatSenderAndMessageList := make([]chatHistoryResponse, 0)
 
-	rowPtrs, err := db.Query("select sender,message from " + config.ChatTable + " where room='" + getRoomName(username, sender) + "'")
+	var senderUsername []string
+	var messageToBeSent []string
+
+	room := getRoomName(username, sender)
+	count, err := db.Model(&model.ChatTable{}).ColumnExpr("array_agg(sender), array_agg(message)").Where("room = ?", room).SelectAndCount(pg.Array(&senderUsername), pg.Array(&messageToBeSent))
 
 	if err != nil {
 		return err
 	}
 
-	for rowPtrs.Next() {
-		if err := rowPtrs.Scan(&sender, &message); err != nil {
-			return err
-		}
+	for idx := 0; idx < count; idx++ {
 		chatSenderAndMessageList = append(chatSenderAndMessageList, chatHistoryResponse{
-			Sender:      sender,
-			ChatMessage: message,
+			Sender:      senderUsername[idx],
+			ChatMessage: messageToBeSent[idx],
 		})
 	}
 

@@ -1,10 +1,11 @@
 package search
 
 import (
-	"database/sql"
 	"fmt"
+	"github.com/go-pg/pg/v10"
 	_ "github.com/lib/pq"
 	"instant-messaging-platform-backend/config"
+	"instant-messaging-platform-backend/database/model"
 	"instant-messaging-platform-backend/server/authentication"
 
 	"github.com/gofiber/fiber/v2"
@@ -21,15 +22,14 @@ func CheckIfUserExists(ctx *fiber.Ctx) error {
 		return fiber.NewError(400)
 	}
 
-	db, err := sql.Open("postgres", config.PostgresConfig)
-	if err != nil {
-		return err
-	}
+	db := pg.Connect(&pg.Options{
+		User:     config.User,
+		Database: config.DbName,
+	})
 	defer db.Close()
 
-	sqlRes, err := db.Exec("select * from " + config.UsersTable + " where username='" + queryUsername + "'")
+	noOfUsersWithGivenUsername, err := db.Model(&model.UsersTable{}).Where("username = ?", queryUsername).Count()
 
-	noOfUsersWithGivenUsername, err := sqlRes.RowsAffected()
 	if err != nil {
 		return err
 	}

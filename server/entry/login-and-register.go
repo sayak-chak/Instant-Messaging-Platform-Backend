@@ -1,9 +1,10 @@
 package entry
 
 import (
-	"database/sql"
 	"errors"
+	"github.com/go-pg/pg/v10"
 	"instant-messaging-platform-backend/config"
+	"instant-messaging-platform-backend/database/model"
 	"instant-messaging-platform-backend/server/store"
 
 	"encoding/json"
@@ -29,10 +30,10 @@ type LoginRequest struct {
 var loginRegisterFailResponse string = `{"isRequestSuccessful":false}`
 
 func Register(ctx *fiber.Ctx) error {
-	db, err := sql.Open("postgres", config.PostgresConfig)
-	if err != nil {
-		return err
-	}
+	db := pg.Connect(&pg.Options{
+		User:     config.User,
+		Database: config.DbName,
+	})
 	defer db.Close()
 
 	loginReq := LoginRequest{}
@@ -40,7 +41,7 @@ func Register(ctx *fiber.Ctx) error {
 		return err
 	}
 
-	err = sendSuccessResponse(insertCreds(db, loginReq.Username, loginReq.Password), ctx, 201, 409)
+	err := sendSuccessResponse(insertCreds(db, loginReq.Username, loginReq.Password), ctx, 201, 409)
 	if err != nil {
 		return fiber.NewError(409, loginRegisterFailResponse)
 	}
@@ -49,10 +50,10 @@ func Register(ctx *fiber.Ctx) error {
 }
 
 func Login(ctx *fiber.Ctx) error {
-	db, err := sql.Open("postgres", config.PostgresConfig)
-	if err != nil {
-		return err
-	}
+	db := pg.Connect(&pg.Options{
+		User:     config.User,
+		Database: config.DbName,
+	})
 	defer db.Close()
 
 	loginReq := LoginRequest{}
@@ -60,7 +61,7 @@ func Login(ctx *fiber.Ctx) error {
 		return err
 	}
 
-	err = sendSuccessResponse(validateCreds(db, loginReq.Username, loginReq.Password), ctx, 200, 400)
+	err := sendSuccessResponse(validateCreds(db, loginReq.Username, loginReq.Password), ctx, 200, 400)
 	if err != nil {
 		return fiber.NewError(400, loginRegisterFailResponse)
 	}
@@ -69,24 +70,24 @@ func Login(ctx *fiber.Ctx) error {
 }
 
 func LoginCheck(ctx *fiber.Ctx) error {
-	var uuid string
+	//var uuid string
 	var username string
+	authToken := string(ctx.Request().Header.Cookie("Auth-Token"))
 
-	db, err := sql.Open("postgres", config.PostgresConfig)
+	db := pg.Connect(&pg.Options{
+		User:     config.User,
+		Database: config.DbName,
+	})
+	defer db.Close()
+
+	err := db.Model(&model.CredsTable{}).Column("username").Where("uuid = ?", authToken).Select(&username)
+
 	if err != nil {
 		return err
 	}
-	defer db.Close()
-	p := ctx.Request().Header.Cookie("Auth-Token")
-
-	rowPtr := db.QueryRow("select * from " + config.CredsTable + " where uuid='" + string(ctx.Request().Header.Cookie("Auth-Token")) + "'")
-	if err := rowPtr.Scan(&uuid, &username); err != nil {
-		return fiber.NewError(400, "No such user is registered")
-	}
-
 	loginCheckResp, err := json.Marshal(LoginCheckResponse{
 		Username:  username,
-		AuthToken: string(p),
+		AuthToken: authToken,
 	})
 	if err != nil {
 		return err
@@ -95,26 +96,21 @@ func LoginCheck(ctx *fiber.Ctx) error {
 	return ctx.Send(loginCheckResp)
 }
 
-func insertCreds(db *sql.DB, username string, password string) error {
-	_, err := db.Exec("create table if not exists " + config.UsersTable + "(username varchar(20), password varchar(20), PRIMARY KEY (username))")
-	if err != nil {
-		return err
-	}
-	_, err = db.Exec("insert into " + config.UsersTable + " values ('" + username + "','" + password + "')")
+func insertCreds(db *pg.DB, username string, password string) error {
+	_, err := db.Model(&model.UsersTable{
+		username,
+		password,
+	}).Insert()
 	return err
 }
 
-func validateCreds(db *sql.DB, username string, password string) error {
-	sqlres, err := db.Exec("select password from " + config.UsersTable + " where username='" + username + "' and password='" + password + "'")
-	if err != nil {
-		return err
-	}
-	isUserRegistered, err := sqlres.RowsAffected()
+func validateCreds(db *pg.DB, username string, password string) error {
+	isUserRegistered, err := db.Model(&model.UsersTable{}).Where("username = ? and password = ?", username, password).Count()
 	if err != nil {
 		return err
 	}
 	if isUserRegistered != 1 {
-		return errors.New("User not registered")
+		return errors.New("user not registered")
 	}
 	return nil
 }
@@ -133,7 +129,7 @@ func sendSuccessResponse(err error, ctx *fiber.Ctx, successStatusCode int, failu
 	}
 }
 
-func storeAuthCookieAndUpdateDatabase(ctx *fiber.Ctx, db *sql.DB) error {
+func storeAuthCookieAndUpdateDatabase(ctx *fiber.Ctx, db *pg.DB) error {
 	loginReq := LoginRequest{}
 	if err := ctx.BodyParser(&loginReq); err != nil {
 		return err
@@ -148,11 +144,9 @@ func storeAuthCookieAndUpdateDatabase(ctx *fiber.Ctx, db *sql.DB) error {
 		return err
 	}
 
-	_, err = db.Exec("create table if not exists " + config.CredsTable + "(uuid varchar(36), username varchar(20), PRIMARY KEY (uuid))") //varchar 36 to store uuid
-	if err != nil {
-		return err
-	}
-	_, err = db.Exec("insert into " + config.CredsTable + " values ('" + store.ID() + "','" + loginReq.Username + "')")
-
+	_, err = db.Model(&model.CredsTable{
+		UUID:     store.ID(),
+		Username: loginReq.Username,
+	}).Insert()
 	return err
 }

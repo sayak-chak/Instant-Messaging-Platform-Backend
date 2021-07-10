@@ -1,32 +1,28 @@
 package authentication
 
 import (
-	"database/sql"
 	"errors"
-	"instant-messaging-platform-backend/config"
+	"github.com/go-pg/pg/v10"
 	_ "github.com/lib/pq"
+	"instant-messaging-platform-backend/config"
+	"instant-messaging-platform-backend/database/model"
 )
 
-
 func IsAuthValid(authToken string) (bool, error) {
-	
-	db, err := sql.Open("postgres", config.PostgresConfig)
-	if err != nil {
-		return false, err
-	}
+
+	db := pg.Connect(&pg.Options{
+		User:     config.User,
+		Database: config.DbName,
+	})
 	defer db.Close()
 
-	sqlRes, err := db.Exec("select * from " + config.CredsTable + " where uuid='" + authToken + "'")
-	if err != nil {
-		return false, err
-	}
-	noOfUsersWithThisAuth, err := sqlRes.RowsAffected()
+	noOfUsersWithThisAuth, err := db.Model(&model.CredsTable{}).Where("uuid = ?", authToken).Count()
 	if err != nil {
 		return false, err
 	}
 	if noOfUsersWithThisAuth == 1 {
 		return true, nil
 	}
-	
-	return false, errors.New("Invalid credentials")
+
+	return false, errors.New("invalid credentials")
 }

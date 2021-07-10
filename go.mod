@@ -4,6 +4,7 @@ go 1.15
 
 require (
 	github.com/andybalholm/brotli v1.0.2 // indirect
+	github.com/go-pg/pg/v10 v10.10.1
 	github.com/gofiber/fiber/v2 v2.9.0
 	github.com/gofiber/utils v0.1.2
 	github.com/gofiber/websocket/v2 v2.0.3

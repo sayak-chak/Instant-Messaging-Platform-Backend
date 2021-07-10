@@ -18,14 +18,6 @@ var sessionConfig = session.Config{
 	CookieSecure:   true,
 	CookieHTTPOnly: false,
 	CookieSameSite: "None",
-
-	// Expiration:     30 * time.Minute,
-	// Storage:        nil,
-	// CookieName:     "Auth-Token",
-	// CookieDomain:   "",
-	// CookiePath:     "",
-	// CookieSecure:   false,
-	// CookieHTTPOnly: false,
 }
 
 func StartNewSession() {
