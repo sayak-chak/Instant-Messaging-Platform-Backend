@@ -32,3 +32,27 @@ func SetupDataBase() error {
 	}
 	return nil
 }
+
+func TearDown() error {
+	db := pg.Connect(&pg.Options{
+		User:     config.User,
+		Database: config.DbName,
+	})
+	defer db.Close()
+
+	modelList := []interface{}{
+		(*model.UsersTable)(nil),
+		(*model.CredsTable)(nil),
+		(*model.ChatTable)(nil),
+	}
+
+	for _, tableModel := range modelList {
+		err := db.Model(tableModel).DropTable(&orm.DropTableOptions{
+			Cascade: false,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

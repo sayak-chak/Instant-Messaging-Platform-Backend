@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"github.com/go-pg/pg/v10"
 	_ "github.com/lib/pq"
-	"instant-messaging-platform-backend/client"
 	"instant-messaging-platform-backend/config"
 	"instant-messaging-platform-backend/database/model"
+	instantMessagingServerClient "instant-messaging-platform-backend/server/client"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
 	"gopkg.in/square/go-jose.v2/json"
 )
 
-var broadcastChannelForGroupChat = make(chan chatResponse)
+var broadcastChannelForGroupChat = make(chan ChatResponse)
 
 type chatRequest struct {
 	Target  string `json:"target"`
@@ -21,7 +21,7 @@ type chatRequest struct {
 	Message string `json:"message"`
 }
 
-type chatResponse struct {
+type ChatResponse struct {
 	Type    string `json:"type"`
 	Sender  string `json:"sender"`
 	Message string `json:"message"`
@@ -38,17 +38,17 @@ type chatHistoryResponse struct {
 
 func Chat(ctx *websocket.Conn) {
 	//TODO: implement authentication
-	if _, isClientAlreadyPresent := client.ClientsMap[ctx.Query("sender")]; isClientAlreadyPresent {
+	if _, isClientAlreadyPresent := instantMessagingServerClient.ClientsMap[ctx.Query("sender")]; isClientAlreadyPresent {
 		return
 	}
-	client.AddClient(ctx.Query("sender"), ctx)
+	instantMessagingServerClient.AddClient(ctx.Query("sender"), ctx)
 	defer ctx.Close()
 
-	go broadcastMsgInGroup()
+	go BroadcastMsgInGroup()
 
 	for {
 		chatRequestDetails := chatRequest{}
-		var chatResponseDetails chatResponse
+		var chatResponseDetails ChatResponse
 
 		err := ctx.ReadJSON(&chatRequestDetails)
 		if err != nil { //TODO : add idle timer
@@ -57,14 +57,14 @@ func Chat(ctx *websocket.Conn) {
 			//if err != nil {
 			//	print("Can't close client..", err)
 			//}
-			client.RemoveClient(chatRequestDetails.Sender)
+			instantMessagingServerClient.RemoveClient(chatRequestDetails.Sender)
 			break
 		}
 		typeOfResponse := "Group"
 		if chatRequestDetails.Target != typeOfResponse {
 			typeOfResponse = "Personal"
 		}
-		chatResponseDetails = chatResponse{
+		chatResponseDetails = ChatResponse{
 			Type:    typeOfResponse,
 			Sender:  chatRequestDetails.Sender,
 			Message: chatRequestDetails.Message,
@@ -72,19 +72,19 @@ func Chat(ctx *websocket.Conn) {
 		if typeOfResponse == "Group" {
 			broadcastChannelForGroupChat <- chatResponseDetails
 		} else {
-			sendDirectMessageTo(chatRequestDetails.Target, chatResponseDetails)
+			SendDirectMessageTo(chatRequestDetails.Target, &chatResponseDetails)
 		}
 	}
 }
 
-func sendDirectMessageTo(target string, chatResponseDetails chatResponse) {
-	targetCtx, isTargetClientPresent := client.ClientsMap[target]
+func SendDirectMessageTo(target string, chatResponseDetails *ChatResponse) {
+	targetCtx, isTargetClientPresent := instantMessagingServerClient.ClientsMap[target]
 	if isTargetClientPresent {
 		err := targetCtx.WriteJSON(chatResponseDetails)
 		if err != nil {
 			fmt.Println(err)
 		}
-		ownCxt, isPresent := client.ClientsMap[chatResponseDetails.Sender]
+		ownCxt, isPresent := instantMessagingServerClient.ClientsMap[chatResponseDetails.Sender]
 		if !isPresent {
 			storeMessageInDataBase(chatResponseDetails.Sender, chatResponseDetails.Message, target)
 			return
@@ -94,7 +94,7 @@ func sendDirectMessageTo(target string, chatResponseDetails chatResponse) {
 		return
 
 	}
-	ownCxt, isPresent := client.ClientsMap[chatResponseDetails.Sender]
+	ownCxt, isPresent := instantMessagingServerClient.ClientsMap[chatResponseDetails.Sender]
 	if !isPresent {
 		storeMessageInDataBase(chatResponseDetails.Sender, chatResponseDetails.Message, target)
 		return
@@ -104,15 +104,15 @@ func sendDirectMessageTo(target string, chatResponseDetails chatResponse) {
 	storeMessageInDataBase(chatResponseDetails.Sender, chatResponseDetails.Message, target)
 }
 
-func broadcastMsgInGroup() {
+func BroadcastMsgInGroup() {
 	for {
 		msg := <-broadcastChannelForGroupChat
 
-		for specificClient := range client.ClientsMap {
-			err := client.ClientsMap[specificClient].WriteJSON(msg)
+		for specificClient := range instantMessagingServerClient.ClientsMap {
+			err := instantMessagingServerClient.ClientsMap[specificClient].WriteJSON(msg)
 			if err != nil { // close that client & remove it
-				client.ClientsMap[specificClient].Close()
-				client.RemoveClient(specificClient)
+				instantMessagingServerClient.ClientsMap[specificClient].Close()
+				instantMessagingServerClient.RemoveClient(specificClient)
 			}
 		}
 	}

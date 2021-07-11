@@ -1,13 +1,15 @@
 package mocks
 
 import (
-	"database/sql"
 	"encoding/json"
-	"fmt"
+	"github.com/go-pg/pg/v10"
+	"github.com/go-pg/pg/v10/orm"
 	_ "github.com/lib/pq"
 	"instant-messaging-platform-backend/config"
+	"instant-messaging-platform-backend/database/model"
 )
 
+const MOCK_PASSWORD = "MOCK_PASSWORD"
 func AuthValidator(authToken string) (bool, error) { return true, nil }
 
 func GetLoginJson(username string, password string) ([]byte, error) {
@@ -19,63 +21,81 @@ func GetLoginJson(username string, password string) ([]byte, error) {
 }
 
 func FillAuthTokenInDB(uuid string, username string) error {
-	db, err := sql.Open("postgres", config.PostgresConfig)
-	if err != nil {
-		return err
-	}
+	db := pg.Connect(&pg.Options{
+		User:     config.User,
+		Database: config.DbName,
+	})
 	defer db.Close()
 
-	_, err = db.Exec("insert into " + config.CredsTable + " values ('" + uuid + "','" + username + "')")
+	_, err := db.Model(&model.CredsTable{
+		UUID:     uuid,
+		Username: username,
+	}).
+		Insert()
+	//Exec("insert into " + config.CredsTable + " values ('" + uuid + "','" + username + "')")
 	return err
 }
 
 func RegisterUser(username string) error {
-	db, err := sql.Open("postgres", config.PostgresConfig)
-	if err != nil {
-		return err
-	}
+	db := pg.Connect(&pg.Options{
+		User:     config.User,
+		Database: config.DbName,
+	})
 	defer db.Close()
 
-	_, err = db.Exec("insert into " + config.UsersTable + " values ('" + username + "','" + "MOCK_PASSWORD" + "')")
+	_, err := db.Model(&model.UsersTable{
+		username,
+		MOCK_PASSWORD,
+	}).Insert()
+	//Exec("insert into " + config.UsersTable + " values ('" + username + "','" + "MOCK_PASSWORD" + "')")
 	return err
 }
 
 func SetupDataBase() error {
-	db, err := sql.Open("postgres", config.PostgresConfig)
-	if err != nil {
-		return err
-	}
+	db := pg.Connect(&pg.Options{
+		User:     config.User,
+		Database: config.DbName,
+	})
 	defer db.Close()
 
-	_, err = db.Exec("create table if not exists " + config.UsersTable + "(username varchar(20), password varchar(20), PRIMARY KEY (username))")
-	if err != nil {
-		return err
+	modelList := []interface{}{
+		(*model.UsersTable)(nil),
+		(*model.CredsTable)(nil),
+		(*model.ChatTable)(nil),
 	}
-	_, err = db.Exec("create table if not exists " + config.CredsTable + "(uuid varchar(36), username varchar(20), PRIMARY KEY (uuid))") //varchar 36 to store uuid
-	if err != nil {
-		return err
+
+	for _, tableModel := range modelList {
+		err := db.Model(tableModel).CreateTable(&orm.CreateTableOptions{
+			Temp:        false,
+			IfNotExists: true,
+		})
+		if err != nil {
+			return err
+		}
 	}
-	_, err = db.Exec("create table if not exists " + config.ChatTable + "(sender varchar(20), room varchar(50), message varchar(500))")
-	return err
+	return nil
 }
 
-func TearDown() {
-	db, err := sql.Open("postgres", config.PostgresConfig)
-	if err != nil {
-		fmt.Println(err)
-	}
+func TearDown() error {
+	db := pg.Connect(&pg.Options{
+		User:     config.User,
+		Database: config.DbName,
+	})
 	defer db.Close()
 
-	_, err = db.Exec("drop table " + config.CredsTable)
-	if err != nil {
-		fmt.Println(err)
+	modelList := []interface{}{
+		(*model.UsersTable)(nil),
+		(*model.CredsTable)(nil),
+		(*model.ChatTable)(nil),
 	}
-	_, err = db.Exec("drop table " + config.UsersTable)
-	if err != nil {
-		fmt.Println(err)
+
+	for _, tableModel := range modelList {
+		err := db.Model(tableModel).DropTable(&orm.DropTableOptions{
+			Cascade: false,
+		})
+		if err != nil {
+			return err
+		}
 	}
-	_, err = db.Exec("drop table " + config.ChatTable)
-	if err != nil {
-		fmt.Println(err)
-	}
+	return nil
 }
